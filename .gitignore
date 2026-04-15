@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# Pytest cache
+.pytest_cache/
+
+# Airflow logs
+logs/
 # Distribution / packaging
 .Python
 build/
