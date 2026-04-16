@@ -1,14 +1,36 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: crypto-ingestion-job
+  name: cmc-ingestion-job
 spec:
   template:
     spec:
       containers:
       - name: ingestion
         image: crypto-ingestion:v1
-        imagePullPolicy: Never # Use the local image we built
+        imagePullPolicy: Never 
+        # Here is where we tell this specific job to run the CMC script
+        command: ["python"]
+        args: ["cmc_ingestor.py"]
+        envFrom:
+        - secretRef:
+            name: ingestion-secrets
+      restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: coingecko-ingestion-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: ingestion
+        image: crypto-ingestion:v1
+        imagePullPolicy: Never 
+        # Here is where we tell this specific job to run the CoinGecko script
+        command: ["python"]
+        args: ["coingecko_ingestor.py"]
         envFrom:
         - secretRef:
             name: ingestion-secrets
