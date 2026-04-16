@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: crypto-ingestion-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: ingestion
+        image: crypto-ingestion:v1
+        imagePullPolicy: Never # Use the local image we built
+        envFrom:
+        - secretRef:
+            name: ingestion-secrets
+      restartPolicy: OnFailure
