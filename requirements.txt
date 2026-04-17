@@ -4,6 +4,8 @@ azure-storage-blob==12.19.0
 azure-identity==1.15.0
 apache-airflow==2.8.1
 apache-airflow-providers-microsoft-azure==8.3.0
+apache-airflow-providers-cncf-kubernetes>=8.0.0
+apache-airflow-providers-databricks>=6.0.0
 pendulum>=3.0.0
 pytest==7.4.0
 responses==0.25.0

@@ -1,121 +1,112 @@
-# Crypto Market Cap Analytics Platform 🚀
+Crypto Market Intelligence Pipeline
+An end-to-end data engineering pipeline that ingests real-time cryptocurrency data from multiple APIs, processes it through a Medallion architecture in Databricks, and orchestrates the entire flow using Airflow running on Kubernetes (Minikube).
 
-An end-to-end data engineering pipeline that ingests, processes, and serves cryptocurrency market data. This project utilizes a Medallion Architecture (Bronze, Silver, Gold) to transform raw API data into analytical dashboards.
+🏗 Project Architecture
+Ingestion Layer: Python scripts (CMC, CoinGecko) containerized in Docker.
 
-## 🏗️ Architecture & Tech Stack
+Storage Layer: Azure Data Lake Storage (ADLS) Gen2 (Bronze, Silver, Gold zones).
 
-* **Data Source:** CoinGecko API (Historical and Real-Time Market Data)
-* **Orchestration:** Apache Airflow (Dockerized)
-* **Storage:** Azure Data Lake Storage Gen2 (ADLS)
-* **Data Processing:** Databricks & PySpark (Delta Lake)
-* **Language:** Python 3.10+
+Transformation Layer: Databricks Spark notebooks (Validation -> Delta Lake -> Feature Engineering).
 
----
+Orchestration Layer: Apache Airflow running on Minikube using KubernetesPodOperator.
 
-## 🛠️ Prerequisites
+🚀 1. Ingestion to ADLS (Bronze)
+The ingestion layer extracts raw JSON data and lands it in the Bronze zone.
 
-Before you begin, ensure you have the following installed on your machine:
-* [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-* [Python 3.10+](https://www.python.org/downloads/)
-* Git
-* An Azure account with a Data Lake Storage Gen2 account created.
-* A CoinGecko API Key (Free tier works, Pro tier recommended for high volume).
-* A CoinMarketCap API key
+Sources:
 
----
+CoinMarketCap: Real-time listings and global quotes.
 
-## 🚀 Phase 1: Local Environment Setup & Airflow Initialization
+CoinGecko: Market snapshots and 30-day historical backfills for BTC/ETH.
 
-This initial phase covers cloning the repository, setting up an isolated Python environment, and getting the Airflow container running locally to handle our data ingestion.
+Logic: Data is timestamped and partitioned by ingestion_date to prevent data loss.
 
-**1. Clone the repository and navigate into it**
-```bash
-git clone <your-repo-url>
-cd crypto-market-intelligence
-```
+Containerization: Logic is packaged into the crypto-ingestion:v1 image.
 
-**2. Create and activate a virtual environment**
-It is highly recommended to use a virtual environment to keep project dependencies isolated.
-```bash
-# Create the virtual environment
-python -m venv venv
+Key Files: cmc_ingestor.py, coingecko_ingestor.py, Dockerfile.
 
-# Activate the virtual environment:
-# -> On macOS/Linux:
-source venv/bin/activate
-# -> On Windows:
-venv\Scripts\activate
-```
+💎 2. Databricks Medallion Workflow
+The pipeline follows the Medallion architecture to ensure data quality and readiness for analytics.
 
-**3. Install project dependencies**
-With your virtual environment activated, install the required Python packages.
-```bash
-# Upgrade pip to the latest version
-pip install --upgrade pip
+Bronze Validation (01_bronze_validation.ipynb)
+Loads raw JSON files from ADLS using Spark.
 
-# Install the dependencies
-pip install -r requirements.txt
-```
+Validates payload integrity (checking for nulls or empty responses).
 
-**4. Configure Environment Variables**
-Create your local `.env` file from the provided template. You will need to open this file and add your specific API keys and Azure credentials.
-```bash
-cp .env.example .env
-```
+Flattens high-level metadata for downstream processing.
 
-**5. Start the Airflow Docker Containers**
-We use Docker Compose to orchestrate the Airflow webserver, scheduler, and database.
-```bash
-# Initialize the Airflow database (Run this ONLY the first time)
-docker-compose up airflow-init
+Silver Transformations (02_silver_transformations.ipynb)
+Schema Enforcement: Applies strict schemas to the nested JSON payloads.
 
-# Start all Airflow services in detached mode
-docker-compose up -d
-```
+Deduplication: Removes duplicate records based on id and ingested_at.
 
-**6. Access the Airflow UI**
-* Open your browser and navigate to: `http://localhost:8082`
-* **Username:** `admin`
-* **Password:** `admin`
+Delta Lake: Saves data as Delta tables (silver_quotes, silver_historical, silver_global) for ACID compliance.
 
-**7. Enable and Trigger DAGs**
-Once inside the Airflow UI, you can interact with the pipelines:
-* **`real_time_ingestion`**: Unpause this DAG to allow it to run automatically every 15 minutes.
-* **`historical_backfill`**: Unpause and trigger this DAG manually **once** to seed the Data Lake with historical crypto data.
+Gold Features (03_gold_transformations.ipynb)
+Aggregations: Calculates 7-day and 30-day moving averages for prices.
 
-**8. Run Tests (Optional but recommended)**
-Verify that your local logic and DAG definitions are valid before making new commits.
-```bash
-pytest tests/ -v
-```
+Analytics: Creates high-level views of market dominance and price volatility.
 
----
+Output: Final tables optimized for PowerBI or ML modeling.
 
-## 📂 Repository Structure
+☸️ 3. Airflow Setup & Scheduling
+The orchestration runs locally on a Kubernetes cluster via Minikube.
 
-```text
-crypto-platform/
-│
-├── airflow_dags/                           # Airflow DAG definitions
-│   ├── historical_backfill.py      # DAG for 180-day backfill
-│   └── real_time_ingestion.py      # DAG for 15-minute incremental loads
-│
-├── ingestion/                      # Core ingestion logic and API clients
-│   ├── adls_client.py              # Azure Data Lake connector
-│   ├── coingecko_client.py         # API client with rate-limiting & backoff
-│   └── utils.py                    # Helper functions and formatting
-│
-├── .env.example                    # Template for environment variables
-├── .gitignore                      # Git exclusions (logs, pycache, venv)
-├── docker-compose.yaml             # Airflow infrastructure configuration
-├── requirements.txt                # Python package dependencies
-└── README.md                       # Project documentation
-```
+Infrastructure Setup
+Start Cluster: minikube start
 
----
+Mount DAGs: Connect local files to the cluster:
 
-## 🔮 Phase 2: Databricks & Medallion Architecture (Coming Soon)
-After the data is successfully ingested into the **Bronze Layer** (Raw JSON) via Airflow, Phase 2 will involve Databricks notebooks to:
-1. Clean and type-cast the data into the **Silver Layer** (Delta Tables).
-2. Pre-calculate business metrics (Moving Averages, Daily OHLC) into the **Gold Layer**.
-3. Connect the Gold tables to a BI Dashboard.
+Bash
+minikube mount ./airflow_dags:/Users/as-mac-1250/crypto-market-intelligence/airflow_dags
+Secrets: Kubernetes Secrets store the AZURE_STORAGE_CONNECTION_STRING.
+
+Deploy:
+
+Bash
+kubectl apply -f infra/airflow-manifests.yaml
+DAG Definitions (crypto_pipeline_dag.py)
+cmc_real_time_ingestion: Runs every 15 minutes.
+
+coingecko_on_demand_backfill: Manual trigger for historical data recovery.
+
+daily_databricks_processing: Runs daily at 08:00 AM to process all Bronze data through to Gold.
+
+🛠 Project Management Commands
+Running the Pipeline Locally
+Bash
+# 1. Point terminal to Minikube's Docker
+eval $(minikube docker-env)
+
+# 2. Build Ingestion Image
+docker build -t crypto-ingestion:v1 .
+
+# 3. Retrieve Airflow Admin Password
+kubectl exec -it <airflow-pod-name> -- cat /opt/airflow/standalone_admin_password.txt
+
+# 4. Port Forward to Web UI
+kubectl port-forward svc/airflow-webserver 8080:8080
+Required Airflow Connections
+databricks_default:
+
+Conn Type: Databricks
+
+Host: Your workspace URL (https://adb-xxx.azuredatabricks.net)
+
+Password: Your Personal Access Token (PAT).
+
+📂 Repository Structure
+Plaintext
+.
+├── airflow_dags/
+│   └── crypto_pipeline_dag.py    # Airflow DAG logic
+├── databricks_notebooks/
+│   ├── 01_bronze_validation.ipynb
+│   ├── 02_silver_transformations.ipynb
+│   └── 03_gold_transformations.ipynb
+├── infra/
+│   ├── airflow-manifests.yaml    # K8s Deployment & Service
+│   └── ingestion-job.yaml        # Individual Job templates
+├── cmc_ingestor.py               # CMC API logic
+├── coingecko_ingestor.py         # CoinGecko API logic
+└── Dockerfile                    # Ingestion image config

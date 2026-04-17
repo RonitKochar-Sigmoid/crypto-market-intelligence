@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-webserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-webserver
+  template:
+    metadata:
+      labels:
+        app: airflow-webserver
+    spec:
+      serviceAccountName: airflow-sa
+      containers:
+      - name: webserver
+        image: apache/airflow:2.8.1
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            pip install apache-airflow-providers-cncf-kubernetes apache-airflow-providers-databricks
+            airflow standalone
+        env:
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: SequentialExecutor
+        - name: AIRFLOW__CORE__LOAD_EXAMPLES
+          value: "False"
+        - name: AZURE_STORAGE_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: ingestion-secrets
+              key: AZURE_STORAGE_CONNECTION_STRING
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: dags-volume
+          mountPath: /opt/airflow/dags
+      volumes:
+      - name: dags-volume
+        hostPath:
+          path: /Users/as-mac-1250/crypto-market-intelligence/airflow_dags
+          type: Directory

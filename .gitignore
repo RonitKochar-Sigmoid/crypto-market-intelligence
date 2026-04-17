@@ -13,6 +13,7 @@ __pycache__/
 logs/
 # Distribution / packaging
 .Python
+.vscode/
 build/
 develop-eggs/
 dist/
