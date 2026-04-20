@@ -20,18 +20,17 @@ CMC_ENDPOINTS = {
 
 def fetch_cmc_data(name, url, params=None):
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': CMC_API_KEY}
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        return {
-            "endpoint_type": name,
-            "source": "coinmarketcap",
-            "ingested_at": datetime.now(timezone.utc).isoformat(),
-            "payload": response.json().get('data')
-        }
-    except Exception as e:
-        print(f"❌ Error fetching {name} from CMC: {e}")
-        return None
+    response = requests.get(url, headers=headers, params=params)
+    
+    # This line is key! It will force an error if the status is 401, 404, 500, etc.
+    response.raise_for_status() 
+    
+    return {
+        "endpoint_type": name,
+        "source": "coinmarketcap",
+        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "payload": response.json().get('data')
+    }
 
 def upload_to_azure(data):
     if not data: return

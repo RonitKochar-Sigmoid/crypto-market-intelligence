@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from airflow.providers.databricks.operators.databricks import DatabricksRunNowOperator
+from airflow.providers.cncf.kubernetes.secret import Secret
 from datetime import datetime, timedelta
 
 # Common settings
@@ -10,8 +11,15 @@ default_args = {
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
 }
- 
-# --- DAG 1: CMC Ingestion (Every 15 Minutes) ---
+
+# Define the secrets to be injected into the Pods
+# Format: Secret(deploy_type, deploy_target, secret, key)
+ingestion_secrets = [
+    Secret('env', 'AZURE_STORAGE_CONNECTION_STRING', 'ingestion-secrets', 'AZURE_STORAGE_CONNECTION_STRING'),
+    Secret('env', 'CMC_API_KEY', 'ingestion-secrets', 'CMC_API_KEY')
+]
+
+# --- DAG 1: CMC Ingestion ---
 with DAG(
     dag_id='cmc_real_time_ingestion',
     default_args=default_args,
@@ -24,12 +32,13 @@ with DAG(
         task_id='run_cmc_ingestion',
         name='cmc-ingestion-job',
         namespace='default',
-        image='crypto-ingestion:v1',
+        image='crypto-ingestion:v2',
         cmds=["python", "cmc_ingestor.py"],
+        secrets=ingestion_secrets,  
         in_cluster=True
     )
 
-# --- DAG 2: CoinGecko (On Demand) ---
+# --- DAG 2: CoinGecko ---
 with DAG(
     dag_id='coingecko_on_demand_backfill',
     default_args=default_args,
@@ -42,12 +51,13 @@ with DAG(
         task_id='run_gecko_ingestion',
         name='coingecko-ingestion-job',
         namespace='default',
-        image='crypto-ingestion:v1',
+        image='crypto-ingestion:v2',
         cmds=["python", "coingecko_ingestor.py"],
+        secrets=ingestion_secrets,  
         in_cluster=True
     )
 
-# --- DAG 3: Databricks Pipeline (Daily 8 AM) ---
+# --- DAG 3: Databricks Pipeline ---
 with DAG(
     dag_id='daily_databricks_processing',
     default_args=default_args,

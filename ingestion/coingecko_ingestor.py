@@ -14,18 +14,19 @@ CONTAINER_NAME = "coin-market-cap-api-data"
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 
 def fetch_coingecko_data(name, url, params=None):
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        return {
-            "endpoint_type": name,
-            "source": "coingecko",
-            "ingested_at": datetime.now(timezone.utc).isoformat(),
-            "payload": response.json()
-        }
-    except Exception as e:
-        print(f"❌ Error fetching {name} from CoinGecko: {e}")
-        return None
+    # Perform the request
+    response = requests.get(url, params=params)
+    
+    # Force an error if the status code is NOT 200 (e.g., 429 for rate limits)
+    # This will crash the script and make Airflow turn RED
+    response.raise_for_status()
+    
+    return {
+        "endpoint_type": name,
+        "source": "coingecko",
+        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "payload": response.json()
+    }
 
 def upload_to_azure(data):
     if not data: return
