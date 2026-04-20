@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crypto-api-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crypto-api
+  template:
+    metadata:
+      labels:
+        app: crypto-api
+    spec:
+      containers:
+      - name: crypto-api
+        image: crypto-api:latest
+        imagePullPolicy: Never  # Important: Tells K8s to use the local image we just built
+        ports:
+        - containerPort: 8000
+        env:
+        - name: AZURE_STORAGE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: storage-key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crypto-api-service
+spec:
+  selector:
+    app: crypto-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: NodePort

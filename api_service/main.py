@@ -65,22 +65,80 @@ def list_coins():
 
 @app.get("/coins/{symbol}/latest")
 def get_latest_metrics(symbol: str):
-    """
-    Finalized: Dynamically finds the latest record from Notebook 03's 
-    daily_price_summary output.
-    """
     df = get_df(GOLD_DAILY_SUMMARY)
+    
+    # 1. Filter by Symbol
     coin_df = df[df["symbol"].astype(str).str.upper() == symbol.upper()]
     
     if coin_df.empty:
-        raise HTTPException(status_code=404, detail=f"No data for {symbol}. Try /coins.")
+        raise HTTPException(status_code=404, detail=f"No data for {symbol}.")
     
-    # Notebook 03 uses 'event_timestamp' for the Window logic
-    # We find the best available time column to sort by
-    ts_col = next((c for c in ["event_timestamp", "date", "silver_processing_timestamp"] if c in coin_df.columns), coin_df.columns[0])
+    # 2. Sort by the confirmed column
+    latest_record = coin_df.sort_values("event_timestamp", ascending=False).iloc[0]
     
-    latest_record = coin_df.sort_values(ts_col, ascending=False).iloc[0]
-    return latest_record.to_dict()
+    # 3. SERIALIZATION SAFETY: Convert everything to native Python types
+    # This prevents the 'Object of type Timestamp/NaN is not JSON serializable' error
+    clean_result = {}
+    for key, value in latest_record.to_dict().items():
+        if pd.api.types.is_number(value) and pd.isna(value):
+            clean_result[key] = None  # Convert NaN to null
+        elif hasattr(value, 'isoformat'):
+            clean_result[key] = value.isoformat()  # Convert Timestamps to strings
+        else:
+            clean_result[key] = value
+
+    return clean_result
+
+@app.get("/coins/{symbol}/historical")
+def get_historical_data(symbol: str, days: int = 7):
+    """Returns historical price data for a coin for the last X days."""
+    df = get_df(GOLD_DAILY_SUMMARY)
+    
+    # 1. Filter by symbol
+    coin_df = df[df["symbol"].astype(str).str.upper() == symbol.upper()].copy()
+    
+    if coin_df.empty:
+        raise HTTPException(status_code=404, detail=f"No historical data for {symbol}")
+
+    # 2. CONVERSION FIX: Use utc=True to match your Data Lake format
+    coin_df["dt_obj"] = pd.to_datetime(coin_df["event_timestamp"], utc=True)
+    
+    # 3. FILTER FIX: Use a UTC-aware cutoff to prevent comparison errors
+    cutoff = pd.Timestamp.now(tz='UTC') - pd.Timedelta(days=days)
+    historical_df = coin_df[coin_df["dt_obj"] >= cutoff].sort_values("dt_obj", ascending=False)
+
+    # 4. SERIALIZATION FIX: Manually build the list to handle Timestamps and NaNs
+    results = []
+    for _, row in historical_df.iterrows():
+        item = row.to_dict()
+        # Convert any problematic types to standard Python types
+        for key, value in item.items():
+            if pd.api.types.is_number(value) and pd.isna(value):
+                item[key] = None
+            elif hasattr(value, 'isoformat'):
+                item[key] = value.isoformat()
+        
+        # Keep only necessary columns for a cleaner response
+        filtered_item = {
+            "event_timestamp": item.get("event_timestamp"),
+            "price_usd": item.get("price_usd"),
+            "daily_return": item.get("daily_return"),
+            "seven_day_moving_avg": item.get("7d_moving_avg") # Maps from notebook name
+        }
+        results.append(filtered_item)
+
+    return results
+
+@app.get("/market/global")
+def get_global_metrics():
+    """Returns the latest total market cap and BTC dominance."""
+    df = get_df(SILVER_GLOBAL_PATH)
+    if df.empty:
+        raise HTTPException(status_code=404, detail="Global metrics not found.")
+    
+    # Sort by time to get the absolute latest snapshot
+    latest = df.sort_values("event_timestamp", ascending=False).iloc[0]
+    return latest.to_dict()
 
 @app.get("/market/rankings")
 def get_rankings(top: int = 5):
