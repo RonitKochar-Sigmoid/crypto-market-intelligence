@@ -1,0 +1,13 @@
+# Core dashboard
+streamlit==1.35.0
+plotly==5.22.0
+pandas==2.2.2
+numpy==1.26.4
+pyarrow==16.1.0
+
+# Azure ADLS (for live data)
+azure-storage-blob==12.19.0
+azure-identity==1.15.0
+
+# Env management
+python-dotenv==1.0.0
