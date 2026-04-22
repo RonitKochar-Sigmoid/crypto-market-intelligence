@@ -10,7 +10,7 @@ default_args = {
     'depends_on_past': False,
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
-    'execution_timeout': timedelta(minutes=10)
+    'execution_timeout': timedelta(minutes=12)
 }
 
 # Define the secrets to be injected into the Pods
